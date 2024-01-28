@@ -17,5 +17,5 @@ class VoteSerializer(serializers.ModelSerializer):
     def validate_vote_type(self, value):
         # Проверка, что тип голоса является допустимым
         if value not in [1, -1]:
-            raise serializers.ValidationError("Invalid vote type. Must be 1 or -1")
+            raise serializers.ValidationError("Invalid vote type.")
         return value
