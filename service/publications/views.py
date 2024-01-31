@@ -40,15 +40,15 @@ class VoteView(generics.CreateAPIView):
         existing_vote = Vote.objects.filter(user=self.request.user, publication=publication).first()    
             
         if existing_vote:
-            existing_vote.delete()
             publication.rating -= vote_type
             publication.votes -= 1
+            publication.save()
+        
+            existing_vote.delete()
             
-        else:
-            serializer.save(user=self.request.user)
-            publication.rating += vote_type
-            publication.votes += 1
-
+        serializer.save(user=self.request.user)
+        publication.rating += vote_type
+        publication.votes += 1
         publication.save()
         
 class DeleteVote(generics.DestroyAPIView):
