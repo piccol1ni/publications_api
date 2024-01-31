@@ -1,4 +1,5 @@
-from rest_framework import generics, permissions
+from rest_framework import generics, permissions, status
+from rest_framework.response import Response
 from .models import Publication, Vote
 from .serializers import PublicationSerializer, VoteSerializer
 from django_filters.rest_framework import DjangoFilterBackend
@@ -14,7 +15,13 @@ class PublicationList(generics.ListCreateAPIView):
     filterset_class = PublicationFilter
 
     def get_queryset(self):
-        return Publication.objects.all()
+        ordering = self.request.query_params.get('ordering', '-pub_date')
+
+        if ordering not in ['rating', 'pub_date']:
+            ordering = '-pub_date'
+            return Publication.objects.all().order_by(ordering)
+
+        return Publication.objects.all().order_by(f"-{ordering}")[:10]
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
@@ -43,12 +50,27 @@ class VoteView(generics.CreateAPIView):
             publication.votes += 1
 
         publication.save()
-
         
-class Top10Publications(generics.ListAPIView):
-    serializer_class = PublicationSerializer
-    queryset = Publication.objects.all().order_by('-rating')[:10]
+class DeleteVote(generics.DestroyAPIView):
+    queryset = Vote.objects.all()
+    serializer_class = VoteSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @transaction.atomic
+    def delete(self, request, *args, **kwargs):
+        publication_id = self.kwargs.get('publication_id')
+        publication = get_object_or_404(Publication, id=publication_id)
+
+        existing_vote = Vote.objects.filter(user=self.request.user, publication=publication).first()
+        
+        if existing_vote:
+            existing_vote.delete()
+            publication.rating -= existing_vote.vote_type
+            publication.votes -= 1
+            publication.save()
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        else:
+            return Response({"detail": "Vote not found"}, status=status.HTTP_404_NOT_FOUND)
+
     
-class LatestPublications(generics.ListAPIView):
-    serializer_class = PublicationSerializer
-    queryset = Publication.objects.all().order_by('-pub_date')[:10]
